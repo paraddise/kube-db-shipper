@@ -1,0 +1,112 @@
+image:
+  repository: nginx
+  pullPolicy: IfNotPresent
+  tag: ""
+
+
+imagePullSecrets: []
+nameOverride: "kube-db-shipper"
+fullnameOverride: "kube-db-shipper"
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+# fsGroup: 2000
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# schedule for cronjob
+schedule: "0 0 * * *" # every minute
+
+# Applies to all containers
+common:
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    privileged: false
+    runAsGroup: 2000
+    runAsNonRoot: true
+    runAsUser: 2000
+    seccompProfile:
+      type: RuntimeDefault
+  resources: {}
+    # We usually recommend not to specify default resources and to leave this as a conscious
+    # choice for the user. This also increases chances charts run on environments with little
+    # resources, such as Minikube. If you do want to specify resources, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    # limits:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+
+# TODO(): Add support for mysql
+dump:
+  # Only postgresql supported right now
+  # you are free to add some new backup tool
+  type: "postgresql"
+  # Additional env to add to dumper
+  env: []
+#    - name: foo
+#      value: bar
+  securityContext: {}
+  postgresql:
+    image: docker.io/appapa/kds-pgdump
+    database: "test-database"
+    username: "test-user"
+    password: "test-password"
+    host: "postgresql"
+    port: "5432"
+    SSLMode: "require"
+    pgdumpArgs:
+      - -f
+      - dump.sql
+
+# TODO(): Add support for encryption
+mutators: []
+
+# TODO(): Add support for rotateDate
+shippers:
+  # Only s3 supported right now
+  # you are free to add some new backup tool
+  - type: "s3"
+    # Unique name for containers and secrets
+    name: "s3-default"
+    # File to upload, change this if you added mutators and changed filename
+    file: "dump.sql"
+    strategy:
+      # rotateN - keep N the latest backups
+      # rotateDate - delete backups older than specific date
+      type: "rotateN"
+      options:
+        # Number of backups to keep
+        rotateN: "7"
+        rotateDate: ""
+    # options for s3 client
+    securityContext: {}
+    s3:
+      image: docker.io/appapa/kds-awscli
+      accessKey: "admin"
+      secretKey: "test-password"
+      endpointUrl: "http://minio:9000"
+      defaultRegion: "ru-central1-a"
+      bucket: "backups"
+      # Base folders where will be stored backups
+      subPath: "test"

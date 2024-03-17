@@ -1,0 +1,97 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "kube-db-shipper.fullname" . }}
+  labels:
+    {{- include "kube-db-shipper.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "kube-db-shipper.labels" . | nindent 8 }}
+    spec:
+      template:
+        spec:
+          restartPolicy: "Never"
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            # TODO(): Add security context
+            # Dump
+            - name: dump
+              volumeMounts:
+                - mountPath: /data
+                  name: backup-dir
+              workingDir: /data
+              envFrom:
+                - secretRef:
+                    name: {{ include "kube-db-shipper.fullname" . }}-dump
+              {{- if eq .Values.dump.type "postgresql" }}
+              image: {{ .Values.dump.postgresql.image | quote }}
+              args:
+              {{- range .Values.dump.postgresql.pgdumpArgs }}
+                - {{ . | quote }}
+              {{- end }}
+              env:
+                - name: PGHOST
+                  value: {{ .Values.dump.postgresql.host | quote }}
+                - name: PGPORT
+                  value: {{ .Values.dump.postgresql.port | quote }}
+                - name: PGDATABASE
+                  value: {{ .Values.dump.postgresql.database | quote }}
+                - name: PGSSLMODE
+                  value: {{ .Values.dump.postgresql.SSLMode | quote }}
+              {{- end }}
+
+              {{- range .Values.dump.env }}
+                - {{ . }}
+              {{- end }}
+            # Mutators
+            # Shippers
+            {{- range .Values.shippers }}
+            - name: {{ .name }}
+              volumeMounts:
+                - mountPath: /data
+                  name: backup-dir
+              workingDir: /data
+              envFrom:
+                - secretRef:
+                    name: {{ include "kube-db-shipper.fullname" $ }}-{{.name}}
+
+              {{- if eq .type "s3" }}
+              image: {{ .s3.image | quote }}
+              args:
+                {{- if eq .strategy.type "rotateN" }}
+                - rotateN
+                - {{ .strategy.options.rotateN | quote }}
+                {{- end }}
+              env:
+                - name: AWS_DEFAULT_REGION
+                  value: {{ .s3.defaultRegion | quote }}
+                - name: REMOTE_SUB_PATH
+                  value: {{ .s3.subPath | quote }}
+                - name: TARGET_FILE
+                  value: {{ .file | quote }}
+              {{- end }}
+            {{- end }}
+          volumes:
+            - name: backup-dir
+              emptyDir: {}
+          serviceAccountName: {{ include "kube-db-shipper.serviceAccountName" . }}

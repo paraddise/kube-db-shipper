@@ -1,0 +1,20 @@
+FROM alpine:3.19
+RUN adduser -u 2000 -D -H aws-cli \
+    && apk add --no-cache "aws-cli=2.13.25-r0" jq \
+    && mkdir -m 777 -p "/data"
+COPY --chmod=755 build/rotate_s3.sh /bin/rotate_s3.sh
+
+USER aws-cli:aws-cli
+WORKDIR /data
+
+ENV AWS_ACCESS_KEY_ID=""
+ENV AWS_SECRET_ACCESS_KEY=""
+ENV AWS_DEFAULT_REGION=""
+ENV AWS_ENDPOINT_URL=""
+ENV AWS_BUCKET=""
+ENV REMOTE_SUB_PATH=""
+ENV TARGET_FILE=""
+# See other envs
+# https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html
+
+ENTRYPOINT [ "/bin/rotate_s3.sh" ]

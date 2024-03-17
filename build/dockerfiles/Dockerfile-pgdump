@@ -1,0 +1,19 @@
+FROM alpine:3.19
+
+RUN  adduser -u 2000 -D -H postgres \
+     && apk add --no-cache --no-interactive postgresql16-client \
+     && mkdir -m 777 -p "/data" \
+
+USER postgres:postgres
+WORKDIR /data
+
+ENV PGHOST=""
+ENV PGPORT=""
+ENV PGDATABASE=""
+ENV PGUSER=""
+ENV PGPASSWORD=""
+ENV PGSSLMODE=""
+# See all environment variables
+# https://www.postgresql.org/docs/current/libpq-envars.html
+
+ENTRYPOINT ["pg_dump"]
